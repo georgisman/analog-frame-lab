@@ -272,3 +272,7 @@ canvas {
   .ghost-button { justify-self: start; }
   h1 { font-size: 44px; }
 }
+
+
+/* Важно: авторский display:grid не должен перебивать HTML hidden */
+.empty-state[hidden] { display: none !important; }
