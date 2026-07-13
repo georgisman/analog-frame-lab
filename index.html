@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Добавляй аналоговые рамки по краям фотографии прямо в браузере." />
+  <title>Analog Frame Lab</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">ANALOG FRAME LAB</p>
+        <h1>Добавь фотографии характер плёнки</h1>
+        <p class="subtitle">Загрузи снимок, выбери рамку и скачай готовый файл. Всё работает прямо в браузере.</p>
+      </div>
+      <button id="resetBtn" class="ghost-button" type="button">Сбросить</button>
+    </header>
+
+    <section class="workspace">
+      <aside class="panel controls">
+        <label class="upload-card" for="photoInput">
+          <span class="upload-title">Загрузить фотографию</span>
+          <span class="upload-note">JPG, PNG, WEBP</span>
+          <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp" />
+        </label>
+
+        <div class="control-group">
+          <div class="group-title">Рамка</div>
+          <div id="frameList" class="frame-list"></div>
+        </div>
+
+        <div class="control-group">
+          <label for="frameScale">Толщина рамки <span id="frameScaleValue">100%</span></label>
+          <input id="frameScale" type="range" min="70" max="150" value="100" />
+        </div>
+
+        <div class="control-group">
+          <label for="frameOpacity">Прозрачность <span id="frameOpacityValue">100%</span></label>
+          <input id="frameOpacity" type="range" min="0" max="100" value="100" />
+        </div>
+
+        <div class="control-group">
+          <label for="grain">Зерно <span id="grainValue">8%</span></label>
+          <input id="grain" type="range" min="0" max="30" value="8" />
+        </div>
+
+        <div class="control-group">
+          <label class="checkbox-row">
+            <input id="preserveRatio" type="checkbox" checked />
+            <span>Сохранять исходное разрешение</span>
+          </label>
+        </div>
+
+        <div class="download-grid">
+          <button id="downloadJpg" class="primary-button" type="button" disabled>Скачать JPG</button>
+          <button id="downloadPng" class="secondary-button" type="button" disabled>PNG</button>
+        </div>
+      </aside>
+
+      <section class="preview-shell">
+        <div id="dropZone" class="drop-zone">
+          <canvas id="previewCanvas" aria-label="Предпросмотр фотографии"></canvas>
+          <div id="emptyState" class="empty-state">
+            <div class="empty-icon">＋</div>
+            <strong>Перетащи фотографию сюда</strong>
+            <span>или нажми «Загрузить фотографию»</span>
+          </div>
+        </div>
+        <p class="privacy-note">Фотография не отправляется на сервер.</p>
+      </section>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
