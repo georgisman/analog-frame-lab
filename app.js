@@ -1,33 +1,44 @@
 const photoInput = document.querySelector('#photoInput');
 const canvas = document.querySelector('#previewCanvas');
-const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const emptyState = document.querySelector('#emptyState');
 const dropZone = document.querySelector('#dropZone');
 const frameList = document.querySelector('#frameList');
-const frameScale = document.querySelector('#frameScale');
-const frameOpacity = document.querySelector('#frameOpacity');
+const aspectRatio = document.querySelector('#aspectRatio');
+const fitMode = document.querySelector('#fitMode');
+const photoScale = document.querySelector('#photoScale');
+const offsetX = document.querySelector('#offsetX');
+const offsetY = document.querySelector('#offsetY');
+const backgroundColor = document.querySelector('#backgroundColor');
+const lineWidth = document.querySelector('#lineWidth');
 const grain = document.querySelector('#grain');
-const preserveRatio = document.querySelector('#preserveRatio');
+const preserveResolution = document.querySelector('#preserveResolution');
 const downloadJpg = document.querySelector('#downloadJpg');
 const downloadPng = document.querySelector('#downloadPng');
 const resetBtn = document.querySelector('#resetBtn');
+const renderInfo = document.querySelector('#renderInfo');
 
 const state = {
   photo: null,
   photoName: 'photo',
-  frame: 'torn-scan',
-  frameScale: 1,
-  frameOpacity: 1,
-  grain: 0.08,
+  frame: 'editorial-line',
+  aspectRatio: '4:5',
+  fitMode: 'contain',
+  photoScale: 0.88,
+  offsetX: 0,
+  offsetY: 0,
+  backgroundColor: '#ffffff',
+  lineWidth: 4,
+  grain: 0,
   seed: Math.floor(Math.random() * 1000000)
 };
 
 const frames = [
-  { id: 'torn-scan', title: 'Torn Scan', note: 'рваный край скана' },
-  { id: 'dirty-negative', title: 'Dirty 35', note: 'грязь и царапины' },
-  { id: 'burned-edge', title: 'Burned 120', note: 'тёплая засветка' },
-  { id: 'instant-aged', title: 'Aged Instant', note: 'старая белая рамка' },
-  { id: 'none', title: 'Без рамки', note: 'только зерно' }
+  { id: 'editorial-line', title: 'Editorial', note: 'белая подложка + чёрная линия' },
+  { id: 'white-mat', title: 'White Mat', note: 'чистые белые поля' },
+  { id: 'black-mat', title: 'Black Mat', note: 'чёрная подложка + светлая линия' },
+  { id: 'instant-clean', title: 'Instant', note: 'увеличенное нижнее поле' },
+  { id: 'torn-scan', title: 'Torn Scan', note: 'неровный чёрный край' },
+  { id: 'none', title: 'Без рамки', note: 'только формат и масштаб' }
 ];
 
 function seededRandom(seed) {
@@ -51,333 +62,331 @@ function renderFrameList() {
 
     button.addEventListener('click', () => {
       state.frame = frame.id;
+      applyFrameDefaults(frame.id);
       state.seed = Math.floor(Math.random() * 1000000);
       renderFrameList();
-      draw();
+      syncControls();
+      drawPreview();
     });
 
     frameList.appendChild(button);
   });
 }
 
+function applyFrameDefaults(frameId) {
+  if (frameId === 'editorial-line') {
+    state.backgroundColor = '#ffffff';
+    state.photoScale = 0.88;
+    state.lineWidth = 4;
+  }
+
+  if (frameId === 'white-mat') {
+    state.backgroundColor = '#ffffff';
+    state.photoScale = 0.84;
+    state.lineWidth = 0;
+  }
+
+  if (frameId === 'black-mat') {
+    state.backgroundColor = '#111111';
+    state.photoScale = 0.88;
+    state.lineWidth = 4;
+  }
+
+  if (frameId === 'instant-clean') {
+    state.backgroundColor = '#f2efe7';
+    state.photoScale = 1;
+    state.lineWidth = 0;
+  }
+
+  if (frameId === 'torn-scan') {
+    state.backgroundColor = '#050505';
+    state.photoScale = 0.96;
+    state.lineWidth = 0;
+  }
+}
+
 function loadFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
 
   const reader = new FileReader();
-
   reader.onload = () => {
     const image = new Image();
-
     image.onload = () => {
       state.photo = image;
       state.photoName = file.name.replace(/\.[^.]+$/, '') || 'photo';
       state.seed = Math.floor(Math.random() * 1000000);
-
       emptyState.hidden = true;
       emptyState.style.display = 'none';
-
       downloadJpg.disabled = false;
       downloadPng.disabled = false;
-      draw();
+      drawPreview();
     };
-
+    image.onerror = () => window.alert('Не удалось открыть изображение. Попробуй JPG, PNG или WEBP.');
     image.src = reader.result;
   };
-
   reader.readAsDataURL(file);
 }
 
-function setCanvasSize(image) {
-  const maxSide = preserveRatio.checked ? Infinity : 2800;
-  const ratio = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
-
-  canvas.width = Math.round(image.naturalWidth * ratio);
-  canvas.height = Math.round(image.naturalHeight * ratio);
-}
-
-function draw() {
-  if (!state.photo) return;
-
-  setCanvasSize(state.photo);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(state.photo, 0, 0, canvas.width, canvas.height);
-
-  drawGrain();
-  drawFrame();
-}
-
-function drawGrain() {
-  if (state.grain <= 0) return;
-
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-  const random = seededRandom(state.seed + 17);
-  const strength = 34 * state.grain;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const noise = (random() - 0.5) * strength;
-    data[i] += noise;
-    data[i + 1] += noise;
-    data[i + 2] += noise;
+function parseAspect(value) {
+  if (value === 'original') {
+    if (!state.photo) return 4 / 5;
+    return state.photo.naturalWidth / state.photo.naturalHeight;
   }
 
-  ctx.putImageData(imageData, 0, 0);
+  const [width, height] = value.split(':').map(Number);
+  return width / height;
 }
 
-function createJaggedInset(side, base, random, roughness = 0.75) {
-  const w = canvas.width;
-  const h = canvas.height;
-  const horizontal = side === 'top' || side === 'bottom';
-  const length = horizontal ? w : h;
+function getOutputSize(forExport = false) {
+  const ratio = parseAspect(state.aspectRatio);
+  let longSide = 1800;
+
+  if (forExport) {
+    longSide = preserveResolution.checked && state.photo
+      ? Math.min(7000, Math.max(state.photo.naturalWidth, state.photo.naturalHeight))
+      : 2800;
+  }
+
+  if (ratio >= 1) {
+    return {
+      width: Math.round(longSide),
+      height: Math.max(1, Math.round(longSide / ratio))
+    };
+  }
+
+  return {
+    width: Math.max(1, Math.round(longSide * ratio)),
+    height: Math.round(longSide)
+  };
+}
+
+function getPhotoLayout(width, height) {
+  const imageWidth = state.photo.naturalWidth;
+  const imageHeight = state.photo.naturalHeight;
+
+  let area = { x: 0, y: 0, width, height };
+
+  if (state.frame === 'instant-clean') {
+    const side = Math.round(Math.min(width, height) * 0.065);
+    const top = side;
+    const bottom = Math.round(side * 2.7);
+    area = {
+      x: side,
+      y: top,
+      width: Math.max(1, width - side * 2),
+      height: Math.max(1, height - top - bottom)
+    };
+  }
+
+  const containScale = Math.min(area.width / imageWidth, area.height / imageHeight);
+  const coverScale = Math.max(area.width / imageWidth, area.height / imageHeight);
+  const baseScale = state.fitMode === 'cover' ? coverScale : containScale;
+  const scale = baseScale * state.photoScale;
+
+  const drawWidth = imageWidth * scale;
+  const drawHeight = imageHeight * scale;
+  const shiftX = state.offsetX * area.width * 0.0025;
+  const shiftY = state.offsetY * area.height * 0.0025;
+
+  return {
+    x: area.x + (area.width - drawWidth) / 2 + shiftX,
+    y: area.y + (area.height - drawHeight) / 2 + shiftY,
+    width: drawWidth,
+    height: drawHeight
+  };
+}
+
+function render(targetCanvas, width, height) {
+  const ctx = targetCanvas.getContext('2d', { willReadFrequently: true });
+  targetCanvas.width = width;
+  targetCanvas.height = height;
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.clearRect(0, 0, width, height);
+
+  ctx.fillStyle = state.backgroundColor;
+  ctx.fillRect(0, 0, width, height);
+
+  if (!state.photo) return;
+
+  const rect = getPhotoLayout(width, height);
+  ctx.drawImage(state.photo, rect.x, rect.y, rect.width, rect.height);
+
+  if (state.grain > 0) drawGrain(ctx, width, height);
+
+  if (state.frame === 'editorial-line' || state.frame === 'black-mat') {
+    drawCleanLine(ctx, rect, width, height);
+  }
+
+  if (state.frame === 'torn-scan') {
+    drawTornFrame(ctx, width, height);
+  }
+}
+
+function drawCleanLine(ctx, rect, canvasWidth, canvasHeight) {
+  if (state.lineWidth <= 0) return;
+
+  const scale = Math.min(canvasWidth, canvasHeight) / 1800;
+  const strokeWidth = Math.max(1, state.lineWidth * scale);
+  const inset = strokeWidth / 2;
+
+  ctx.save();
+  ctx.strokeStyle = state.frame === 'black-mat' ? '#f4f2ec' : '#0a0a0a';
+  ctx.lineWidth = strokeWidth;
+  ctx.strokeRect(
+    rect.x - inset,
+    rect.y - inset,
+    rect.width + strokeWidth,
+    rect.height + strokeWidth
+  );
+  ctx.restore();
+}
+
+function createJaggedInset(length, base, random) {
   const step = Math.max(5, Math.round(length / 180));
   const points = [];
-
   let drift = 0;
 
   for (let position = 0; position <= length + step; position += step) {
     drift = drift * 0.72 + (random() - 0.5) * base * 0.28;
-    const micro = (random() - 0.5) * base * roughness;
-    const bite = random() > 0.94 ? random() * base * 0.9 : 0;
-    const depth = Math.max(base * 0.28, base + drift + micro + bite);
-    points.push({ position, depth });
+    const micro = (random() - 0.5) * base * 0.9;
+    const bite = random() > 0.95 ? random() * base * 0.9 : 0;
+    points.push({ position, depth: Math.max(base * 0.25, base + drift + micro + bite) });
   }
 
   return points;
 }
 
-function fillJaggedEdge(side, base, fillStyle, random, roughness = 0.75) {
-  const w = canvas.width;
-  const h = canvas.height;
-  const points = createJaggedInset(side, base, random, roughness);
+function fillJaggedEdge(ctx, side, width, height, base, random) {
+  const horizontal = side === 'top' || side === 'bottom';
+  const points = createJaggedInset(horizontal ? width : height, base, random);
 
-  ctx.fillStyle = fillStyle;
   ctx.beginPath();
-
   if (side === 'top') {
     ctx.moveTo(0, 0);
-    ctx.lineTo(w, 0);
-    for (let i = points.length - 1; i >= 0; i--) {
-      ctx.lineTo(points[i].position, points[i].depth);
-    }
+    ctx.lineTo(width, 0);
+    for (let i = points.length - 1; i >= 0; i -= 1) ctx.lineTo(points[i].position, points[i].depth);
   }
-
   if (side === 'bottom') {
-    ctx.moveTo(0, h);
-    for (const point of points) {
-      ctx.lineTo(point.position, h - point.depth);
-    }
-    ctx.lineTo(w, h);
+    ctx.moveTo(0, height);
+    for (const point of points) ctx.lineTo(point.position, height - point.depth);
+    ctx.lineTo(width, height);
   }
-
   if (side === 'left') {
     ctx.moveTo(0, 0);
-    for (const point of points) {
-      ctx.lineTo(point.depth, point.position);
-    }
-    ctx.lineTo(0, h);
+    for (const point of points) ctx.lineTo(point.depth, point.position);
+    ctx.lineTo(0, height);
   }
-
   if (side === 'right') {
-    ctx.moveTo(w, 0);
-    ctx.lineTo(w, h);
-    for (let i = points.length - 1; i >= 0; i--) {
-      ctx.lineTo(w - points[i].depth, points[i].position);
-    }
+    ctx.moveTo(width, 0);
+    ctx.lineTo(width, height);
+    for (let i = points.length - 1; i >= 0; i -= 1) ctx.lineTo(width - points[i].depth, points[i].position);
   }
-
   ctx.closePath();
   ctx.fill();
 }
 
-function addDust(random, amount, light = false) {
-  const w = canvas.width;
-  const h = canvas.height;
-
-  ctx.save();
-
-  for (let i = 0; i < amount; i++) {
-    const x = random() * w;
-    const y = random() * h;
-    const radius = Math.max(0.4, random() * Math.min(w, h) * 0.0025);
-    const alpha = 0.05 + random() * 0.22;
-
-    ctx.fillStyle = light
-      ? `rgba(255,245,220,${alpha})`
-      : `rgba(0,0,0,${alpha})`;
-
-    ctx.beginPath();
-    ctx.ellipse(x, y, radius * (0.4 + random()), radius, random() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
-}
-
-function addScratches(random, amount) {
-  const w = canvas.width;
-  const h = canvas.height;
-
-  ctx.save();
-  ctx.lineCap = 'round';
-
-  for (let i = 0; i < amount; i++) {
-    const x = random() * w;
-    const y = random() * h;
-    const length = h * (0.03 + random() * 0.25);
-    const bend = (random() - 0.5) * w * 0.018;
-
-    ctx.strokeStyle = `rgba(255,245,225,${0.04 + random() * 0.13})`;
-    ctx.lineWidth = Math.max(0.45, Math.min(w, h) * (0.00025 + random() * 0.0005));
-
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.quadraticCurveTo(x + bend, y + length * 0.5, x + bend * 0.35, y + length);
-    ctx.stroke();
-  }
-
-  ctx.restore();
-}
-
-function addEdgeFog(random, warm = false) {
-  const w = canvas.width;
-  const h = canvas.height;
-  const radius = Math.max(w, h) * 0.42;
-
-  for (let i = 0; i < 4; i++) {
-    const side = Math.floor(random() * 4);
-    const x = side === 1 ? w : side === 3 ? 0 : random() * w;
-    const y = side === 0 ? 0 : side === 2 ? h : random() * h;
-
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, warm ? 'rgba(255,85,22,.22)' : 'rgba(255,230,190,.13)');
-    gradient.addColorStop(0.45, warm ? 'rgba(210,30,0,.07)' : 'rgba(255,220,180,.035)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0)');
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, w, h);
-  }
-}
-
-function drawFrame() {
-  if (state.frame === 'none') return;
-
-  const w = canvas.width;
-  const h = canvas.height;
-  const base = Math.max(12, Math.round(Math.min(w, h) * 0.032 * state.frameScale));
+function drawTornFrame(ctx, width, height) {
   const random = seededRandom(state.seed);
+  const base = Math.max(10, Math.round(Math.min(width, height) * 0.026));
 
   ctx.save();
-  ctx.globalAlpha = state.frameOpacity;
-
-  if (state.frame === 'torn-scan') {
-    const black = '#050505';
-
-    fillJaggedEdge('top', base * 1.05, black, random, 0.95);
-    fillJaggedEdge('bottom', base * 1.15, black, random, 1);
-    fillJaggedEdge('left', base * 0.9, black, random, 0.85);
-    fillJaggedEdge('right', base * 1.1, black, random, 0.9);
-
-    addDust(random, 150, true);
-    addScratches(random, 13);
-  }
-
-  if (state.frame === 'dirty-negative') {
-    const darkBrown = '#120906';
-
-    fillJaggedEdge('top', base * 1.15, darkBrown, random, 0.72);
-    fillJaggedEdge('bottom', base * 1.2, darkBrown, random, 0.76);
-    fillJaggedEdge('left', base * 0.82, darkBrown, random, 0.7);
-    fillJaggedEdge('right', base * 0.9, darkBrown, random, 0.7);
-
-    ctx.fillStyle = 'rgba(255,170,75,.58)';
-    ctx.font = `${Math.max(10, base * 0.34)}px monospace`;
-    ctx.fillText('35  12A  KODAK', base * 1.2, h - base * 0.42);
-
-    addDust(random, 260, false);
-    addDust(random, 75, true);
-    addScratches(random, 28);
-  }
-
-  if (state.frame === 'burned-edge') {
-    const burned = '#180805';
-
-    fillJaggedEdge('top', base * 1.22, burned, random, 0.88);
-    fillJaggedEdge('bottom', base * 1.28, burned, random, 0.92);
-    fillJaggedEdge('left', base * 0.96, burned, random, 0.82);
-    fillJaggedEdge('right', base * 1.12, burned, random, 0.82);
-
-    addEdgeFog(random, true);
-    addDust(random, 120, true);
-    addScratches(random, 10);
-  }
-
-  if (state.frame === 'instant-aged') {
-    const side = base * 1.35;
-    const bottom = base * 3.1;
-    const paper = '#e8e1d1';
-
-    ctx.fillStyle = paper;
-    ctx.fillRect(0, 0, w, side);
-    ctx.fillRect(0, h - bottom, w, bottom);
-    ctx.fillRect(0, 0, side, h);
-    ctx.fillRect(w - side, 0, side, h);
-
-    ctx.globalCompositeOperation = 'multiply';
-    addDust(random, 180, false);
-
-    const stain = ctx.createRadialGradient(w * 0.08, h * 0.95, 0, w * 0.08, h * 0.95, w * 0.32);
-    stain.addColorStop(0, 'rgba(115,70,25,.16)');
-    stain.addColorStop(1, 'rgba(115,70,25,0)');
-    ctx.fillStyle = stain;
-    ctx.fillRect(0, 0, w, h);
-  }
-
+  ctx.fillStyle = '#050505';
+  fillJaggedEdge(ctx, 'top', width, height, base * 1.05, random);
+  fillJaggedEdge(ctx, 'bottom', width, height, base * 1.15, random);
+  fillJaggedEdge(ctx, 'left', width, height, base * 0.9, random);
+  fillJaggedEdge(ctx, 'right', width, height, base * 1.1, random);
   ctx.restore();
+}
+
+function drawGrain(ctx, width, height) {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const random = seededRandom(state.seed + 17);
+  const strength = 28 * state.grain;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const noise = (random() - 0.5) * strength;
+    data[i] = Math.max(0, Math.min(255, data[i] + noise));
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function drawPreview() {
+  if (!state.photo) return;
+
+  const { width, height } = getOutputSize(false);
+  render(canvas, width, height);
+
+  const exportSize = getOutputSize(true);
+  renderInfo.textContent = `Предпросмотр ${width} × ${height} px · экспорт ${exportSize.width} × ${exportSize.height} px`;
+}
+
+function syncControls() {
+  aspectRatio.value = state.aspectRatio;
+  fitMode.value = state.fitMode;
+  photoScale.value = Math.round(state.photoScale * 100);
+  offsetX.value = state.offsetX;
+  offsetY.value = state.offsetY;
+  backgroundColor.value = state.backgroundColor;
+  lineWidth.value = state.lineWidth;
+  grain.value = Math.round(state.grain * 100);
+
+  document.querySelector('#photoScaleValue').textContent = `${photoScale.value}%`;
+  document.querySelector('#offsetXValue').textContent = offsetX.value;
+  document.querySelector('#offsetYValue').textContent = offsetY.value;
+  document.querySelector('#lineWidthValue').textContent = `${lineWidth.value} px`;
+  document.querySelector('#grainValue').textContent = `${grain.value}%`;
+
+  document.querySelectorAll('.color-swatch').forEach((swatch) => {
+    swatch.classList.toggle('active', swatch.dataset.color.toLowerCase() === state.backgroundColor.toLowerCase());
+  });
 }
 
 function download(type) {
   if (!state.photo) return;
 
-  draw();
+  const { width, height } = getOutputSize(true);
+  const exportCanvas = document.createElement('canvas');
+  render(exportCanvas, width, height);
 
+  const extension = type === 'image/png' ? 'png' : 'jpg';
   const link = document.createElement('a');
-  link.download = `${state.photoName}-analog-frame.${type === 'image/png' ? 'png' : 'jpg'}`;
-  link.href = canvas.toDataURL(type, type === 'image/jpeg' ? 0.94 : undefined);
+  link.download = `${state.photoName}-frame.${extension}`;
+  link.href = exportCanvas.toDataURL(type, type === 'image/jpeg' ? 0.95 : undefined);
   link.click();
 }
 
 function reset() {
   state.photo = null;
   state.photoName = 'photo';
-  state.frame = 'torn-scan';
-  state.frameScale = 1;
-  state.frameOpacity = 1;
-  state.grain = 0.08;
+  state.frame = 'editorial-line';
+  state.aspectRatio = '4:5';
+  state.fitMode = 'contain';
+  state.photoScale = 0.88;
+  state.offsetX = 0;
+  state.offsetY = 0;
+  state.backgroundColor = '#ffffff';
+  state.lineWidth = 4;
+  state.grain = 0;
   state.seed = Math.floor(Math.random() * 1000000);
 
   photoInput.value = '';
-  frameScale.value = 100;
-  frameOpacity.value = 100;
-  grain.value = 8;
-  preserveRatio.checked = true;
-
+  preserveResolution.checked = true;
   canvas.width = 0;
   canvas.height = 0;
-
   emptyState.hidden = false;
   emptyState.style.display = '';
-
   downloadJpg.disabled = true;
   downloadPng.disabled = true;
+  renderInfo.textContent = 'Фотография не отправляется на сервер.';
 
-  syncLabels();
+  syncControls();
   renderFrameList();
-}
-
-function syncLabels() {
-  document.querySelector('#frameScaleValue').textContent = `${frameScale.value}%`;
-  document.querySelector('#frameOpacityValue').textContent = `${frameOpacity.value}%`;
-  document.querySelector('#grainValue').textContent = `${grain.value}%`;
 }
 
 photoInput.addEventListener('change', (event) => loadFile(event.target.files[0]));
@@ -398,28 +407,64 @@ photoInput.addEventListener('change', (event) => loadFile(event.target.files[0])
 
 dropZone.addEventListener('drop', (event) => loadFile(event.dataTransfer.files[0]));
 
-frameScale.addEventListener('input', () => {
-  state.frameScale = Number(frameScale.value) / 100;
-  syncLabels();
-  draw();
+aspectRatio.addEventListener('change', () => {
+  state.aspectRatio = aspectRatio.value;
+  drawPreview();
 });
 
-frameOpacity.addEventListener('input', () => {
-  state.frameOpacity = Number(frameOpacity.value) / 100;
-  syncLabels();
-  draw();
+fitMode.addEventListener('change', () => {
+  state.fitMode = fitMode.value;
+  drawPreview();
+});
+
+photoScale.addEventListener('input', () => {
+  state.photoScale = Number(photoScale.value) / 100;
+  syncControls();
+  drawPreview();
+});
+
+offsetX.addEventListener('input', () => {
+  state.offsetX = Number(offsetX.value);
+  syncControls();
+  drawPreview();
+});
+
+offsetY.addEventListener('input', () => {
+  state.offsetY = Number(offsetY.value);
+  syncControls();
+  drawPreview();
+});
+
+backgroundColor.addEventListener('input', () => {
+  state.backgroundColor = backgroundColor.value;
+  syncControls();
+  drawPreview();
+});
+
+document.querySelectorAll('.color-swatch').forEach((swatch) => {
+  swatch.addEventListener('click', () => {
+    state.backgroundColor = swatch.dataset.color;
+    syncControls();
+    drawPreview();
+  });
+});
+
+lineWidth.addEventListener('input', () => {
+  state.lineWidth = Number(lineWidth.value);
+  syncControls();
+  drawPreview();
 });
 
 grain.addEventListener('input', () => {
   state.grain = Number(grain.value) / 100;
-  syncLabels();
-  draw();
+  syncControls();
+  drawPreview();
 });
 
-preserveRatio.addEventListener('change', draw);
+preserveResolution.addEventListener('change', drawPreview);
 downloadJpg.addEventListener('click', () => download('image/jpeg'));
 downloadPng.addEventListener('click', () => download('image/png'));
 resetBtn.addEventListener('click', reset);
 
 renderFrameList();
-syncLabels();
+syncControls();

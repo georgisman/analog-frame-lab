@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Добавляй аналоговые рамки по краям фотографии прямо в браузере." />
+  <meta name="description" content="Добавляй чистые editorial-рамки, белую подложку и аналоговую фактуру к фотографии прямо в браузере." />
   <title>Analog Frame Lab</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -12,8 +12,8 @@
     <header class="hero">
       <div>
         <p class="eyebrow">ANALOG FRAME LAB</p>
-        <h1>Добавь фотографии характер плёнки</h1>
-        <p class="subtitle">Загрузи снимок, выбери рамку и скачай готовый файл. Всё работает прямо в браузере.</p>
+        <h1>Рамки, поля и формат без потери качества</h1>
+        <p class="subtitle">Загрузи фотографию, уменьши её на белой подложке, выбери формат результата и скачай готовый файл. Всё обрабатывается локально в браузере.</p>
       </div>
       <button id="resetBtn" class="ghost-button" type="button">Сбросить</button>
     </header>
@@ -27,30 +27,97 @@
         </label>
 
         <div class="control-group">
-          <div class="group-title">Рамка</div>
-          <div id="frameList" class="frame-list"></div>
+          <span class="group-title">Рамка</span>
+          <div id="frameList" class="frame-list" aria-label="Выбор рамки"></div>
         </div>
 
-        <div class="control-group">
-          <label for="frameScale">Толщина рамки <span id="frameScaleValue">100%</span></label>
-          <input id="frameScale" type="range" min="70" max="150" value="100" />
-        </div>
-
-        <div class="control-group">
-          <label for="frameOpacity">Прозрачность <span id="frameOpacityValue">100%</span></label>
-          <input id="frameOpacity" type="range" min="0" max="100" value="100" />
-        </div>
-
-        <div class="control-group">
-          <label for="grain">Зерно <span id="grainValue">8%</span></label>
-          <input id="grain" type="range" min="0" max="30" value="8" />
-        </div>
-
-        <div class="control-group">
-          <label class="checkbox-row">
-            <input id="preserveRatio" type="checkbox" checked />
-            <span>Сохранять исходное разрешение</span>
+        <div class="control-group two-columns">
+          <label>
+            <span>Формат результата</span>
+            <select id="aspectRatio">
+              <option value="original">Исходный</option>
+              <option value="1:1">1:1</option>
+              <option value="4:5" selected>4:5</option>
+              <option value="5:4">5:4</option>
+              <option value="3:4">3:4</option>
+              <option value="4:3">4:3</option>
+              <option value="2:3">2:3</option>
+              <option value="3:2">3:2</option>
+              <option value="9:16">9:16</option>
+              <option value="16:9">16:9</option>
+            </select>
           </label>
+
+          <label>
+            <span>Размещение</span>
+            <select id="fitMode">
+              <option value="contain" selected>Вписать целиком</option>
+              <option value="cover">Заполнить формат</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="control-group">
+          <div class="label-row">
+            <label for="photoScale">Масштаб фотографии</label>
+            <output id="photoScaleValue">88%</output>
+          </div>
+          <input id="photoScale" type="range" min="45" max="135" value="88" />
+        </div>
+
+        <div class="control-group two-columns range-columns">
+          <div>
+            <div class="label-row">
+              <label for="offsetX">По горизонтали</label>
+              <output id="offsetXValue">0</output>
+            </div>
+            <input id="offsetX" type="range" min="-100" max="100" value="0" />
+          </div>
+          <div>
+            <div class="label-row">
+              <label for="offsetY">По вертикали</label>
+              <output id="offsetYValue">0</output>
+            </div>
+            <input id="offsetY" type="range" min="-100" max="100" value="0" />
+          </div>
+        </div>
+
+        <div class="control-group">
+          <span class="group-title">Цвет подложки</span>
+          <div class="background-picker">
+            <button class="color-swatch active" type="button" data-color="#ffffff" aria-label="Белая подложка" style="--swatch:#ffffff"></button>
+            <button class="color-swatch" type="button" data-color="#f2efe7" aria-label="Тёплая белая подложка" style="--swatch:#f2efe7"></button>
+            <button class="color-swatch" type="button" data-color="#111111" aria-label="Чёрная подложка" style="--swatch:#111111"></button>
+            <label class="custom-color" title="Свой цвет">
+              <span>Свой</span>
+              <input id="backgroundColor" type="color" value="#ffffff" />
+            </label>
+          </div>
+        </div>
+
+        <div class="control-group two-columns range-columns">
+          <div>
+            <div class="label-row">
+              <label for="lineWidth">Толщина линии</label>
+              <output id="lineWidthValue">4 px</output>
+            </div>
+            <input id="lineWidth" type="range" min="0" max="18" value="4" />
+          </div>
+          <div>
+            <div class="label-row">
+              <label for="grain">Зерно</label>
+              <output id="grainValue">0%</output>
+            </div>
+            <input id="grain" type="range" min="0" max="20" value="0" />
+          </div>
+        </div>
+
+        <div class="control-group compact-group">
+          <label class="checkbox-row">
+            <input id="preserveResolution" type="checkbox" checked />
+            <span>Сохранять размер по длинной стороне</span>
+          </label>
+          <p class="microcopy">Для произвольного формата длинная сторона берётся из исходного файла. При отключении экспортируется 2800 px.</p>
         </div>
 
         <div class="download-grid">
@@ -59,16 +126,16 @@
         </div>
       </aside>
 
-      <section class="preview-shell">
+      <section class="preview-shell" aria-label="Предпросмотр">
         <div id="dropZone" class="drop-zone">
-          <canvas id="previewCanvas" aria-label="Предпросмотр фотографии"></canvas>
+          <canvas id="previewCanvas" width="0" height="0"></canvas>
           <div id="emptyState" class="empty-state">
-            <div class="empty-icon">＋</div>
+            <span class="empty-icon">＋</span>
             <strong>Перетащи фотографию сюда</strong>
             <span>или нажми «Загрузить фотографию»</span>
           </div>
         </div>
-        <p class="privacy-note">Фотография не отправляется на сервер.</p>
+        <p id="renderInfo" class="render-info">Фотография не отправляется на сервер.</p>
       </section>
     </section>
   </main>
